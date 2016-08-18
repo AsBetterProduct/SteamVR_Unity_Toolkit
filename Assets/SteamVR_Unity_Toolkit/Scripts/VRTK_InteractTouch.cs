@@ -36,8 +36,7 @@ namespace VRTK
         private VRTK_ControllerActions controllerActions;
         private GameObject controllerCollisionDetector;
         private bool triggerRumble;
-        private bool customRigidBody;
-        private bool customColliderCollection;
+        private bool destroyColliderOnDisable;
         private Rigidbody touchRigidBody;
         private Object defaultColliderPrefab;
 
@@ -120,6 +119,11 @@ namespace VRTK
             }
         }
 
+        public bool IsRigidBodyActive()
+        {
+            return !touchRigidBody.isKinematic;
+        }
+
         public void ForceStopTouching()
         {
             if (touchedObject != null)
@@ -138,8 +142,7 @@ namespace VRTK
             trackedController = GetComponent<SteamVR_TrackedObject>();
             controllerActions = GetComponent<VRTK_ControllerActions>();
             Utilities.SetPlayerObject(gameObject, VRTK_PlayerObject.ObjectTypes.Controller);
-            customRigidBody = false;
-            customColliderCollection = false;
+            destroyColliderOnDisable = false;
             defaultColliderPrefab = Resources.Load("ControllerColliders/HTCVive");
         }
 
@@ -154,7 +157,6 @@ namespace VRTK
         {
             ForceStopTouching();
             DestroyTouchCollider();
-            DestroyTouchRigidBody();
         }
 
         private GameObject GetColliderInteractableObject(Collider collider)
@@ -276,18 +278,22 @@ namespace VRTK
 
         private void DestroyTouchCollider()
         {
-            if(!customColliderCollection)
+            if (destroyColliderOnDisable)
             {
                 Destroy(controllerCollisionDetector);
             }
         }
 
-        private void DestroyTouchRigidBody()
+        private bool CustomRigidBodyIsChild()
         {
-            if(!customRigidBody)
+            foreach (var childTransform in GetComponentsInChildren<Transform>())
             {
-                Destroy(touchRigidBody);
+                if (childTransform == customRigidbodyObject.transform)
+                {
+                    return true;
+                }
             }
+            return false;
         }
 
         private void CreateTouchCollider()
@@ -297,25 +303,34 @@ namespace VRTK
                 controllerCollisionDetector = Instantiate(defaultColliderPrefab, transform.position, transform.rotation) as GameObject;
                 controllerCollisionDetector.transform.SetParent(transform);
                 controllerCollisionDetector.name = "ControllerColliders";
-                customColliderCollection = false;
-            } else
+                destroyColliderOnDisable = true;
+            }
+            else
             {
-                controllerCollisionDetector = Instantiate(customRigidbodyObject, transform.position, transform.rotation) as GameObject;
-                customColliderCollection = true;
+                if (CustomRigidBodyIsChild())
+                {
+                    controllerCollisionDetector = customRigidbodyObject;
+                    destroyColliderOnDisable = false;
+                }
+                else
+                {
+                    controllerCollisionDetector = Instantiate(customRigidbodyObject, transform.position, transform.rotation) as GameObject;
+                    controllerCollisionDetector.transform.SetParent(transform);
+                    destroyColliderOnDisable = true;
+                }
             }
         }
 
         private void CreateTouchRigidBody()
         {
             touchRigidBody = gameObject.GetComponent<Rigidbody>();
-            customRigidBody = true;
             if (touchRigidBody == null)
             {
                 touchRigidBody = gameObject.AddComponent<Rigidbody>();
                 touchRigidBody.isKinematic = true;
                 touchRigidBody.useGravity = false;
+                touchRigidBody.constraints = RigidbodyConstraints.FreezeAll;
                 touchRigidBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
-                customRigidBody = false;
             }
         }
 
